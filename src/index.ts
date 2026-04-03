@@ -8,7 +8,7 @@ const program = new Command();
 
 program
     .name('make-cli')
-    .description('Make CLI - Interact with the Make automation platform')
+    .description('A command-line tool for Make automation platform')
     .version(__VERSION__)
     .option('--api-key <key>', 'Make API key (or set MAKE_API_KEY)')
     .option('--zone <zone>', 'Make zone, e.g. eu1.make.com (or set MAKE_ZONE)')

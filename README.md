@@ -4,8 +4,37 @@ A command-line interface for interacting with the [Make](https://www.make.com) a
 
 ## Installation
 
+### npm
+
 ```bash
 npm install -g @makehq/cli
+```
+
+### Binary releases
+
+Pre-built binaries are available for download from the [GitHub Releases](https://github.com/integromat/make-cli/releases) page:
+
+| Platform | Architecture          | File                            |
+| -------- | --------------------- | ------------------------------- |
+| Linux    | x86_64                | `make-cli-linux-amd64.tar.gz`   |
+| Linux    | arm64                 | `make-cli-linux-arm64.tar.gz`   |
+| macOS    | x86_64 (Intel)        | `make-cli-darwin-amd64.tar.gz`  |
+| macOS    | arm64 (Apple Silicon) | `make-cli-darwin-arm64.tar.gz`  |
+| Windows  | x86_64                | `make-cli-windows-amd64.tar.gz` |
+
+Download and extract the archive for your platform, then place the binary somewhere on your `PATH`.
+
+### Debian/Ubuntu
+
+`.deb` packages are also available for Linux:
+
+| Architecture | File                       |
+| ------------ | -------------------------- |
+| x86_64       | `make-cli-linux-amd64.deb` |
+| arm64        | `make-cli-linux-arm64.deb` |
+
+```bash
+sudo dpkg -i make-cli-linux-amd64.deb
 ```
 
 ## Authentication
