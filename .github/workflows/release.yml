@@ -184,7 +184,7 @@ jobs:
     update-homebrew:
         needs: release
         runs-on: ubuntu-latest
-        if: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY != '' }}
+        if: false # temporary disabled
 
         steps:
             - name: Checkout
