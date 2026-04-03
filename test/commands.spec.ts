@@ -1,9 +1,13 @@
-import { describe, expect, it, beforeEach, afterEach } from '@jest/globals';
-import { Command } from 'commander';
+import { describe, expect, it, beforeEach, afterEach, jest } from '@jest/globals';
+import { Command, Option } from 'commander';
 import { deriveActionName, camelToKebab, coerceValue, buildCommands } from '../src/commands.js';
 import { resolveAuth } from '../src/auth.js';
 import { formatOutput } from '../src/output.js';
 import type { MakeMCPTool } from '@makehq/sdk/mcp';
+
+jest.mock('../src/config.js', () => ({
+    readConfig: jest.fn<() => Promise<null>>().mockResolvedValue(null),
+}));
 
 describe('CLI: deriveActionName', () => {
     it('should derive simple action names', () => {
@@ -112,32 +116,32 @@ describe('CLI: resolveAuth', () => {
         delete process.env.MAKE_ZONE;
     });
 
-    it('should resolve from flags', () => {
-        const result = resolveAuth({ apiKey: 'test-key', zone: 'eu1.make.com' });
+    it('should resolve from flags', async () => {
+        const result = await resolveAuth({ apiKey: 'test-key', zone: 'eu1.make.com' });
         expect(result).toEqual({ token: 'test-key', zone: 'eu1.make.com' });
     });
 
-    it('should resolve from environment variables', () => {
+    it('should resolve from environment variables', async () => {
         process.env.MAKE_API_KEY = 'env-key';
         process.env.MAKE_ZONE = 'eu2.make.com';
-        const result = resolveAuth({});
+        const result = await resolveAuth({});
         expect(result).toEqual({ token: 'env-key', zone: 'eu2.make.com' });
     });
 
-    it('should prefer flags over env vars', () => {
+    it('should prefer flags over env vars', async () => {
         process.env.MAKE_API_KEY = 'env-key';
         process.env.MAKE_ZONE = 'eu2.make.com';
-        const result = resolveAuth({ apiKey: 'flag-key', zone: 'eu1.make.com' });
+        const result = await resolveAuth({ apiKey: 'flag-key', zone: 'eu1.make.com' });
         expect(result).toEqual({ token: 'flag-key', zone: 'eu1.make.com' });
     });
 
-    it('should throw when API key is missing', () => {
-        expect(() => resolveAuth({})).toThrow('API key is required');
+    it('should throw when API key is missing', async () => {
+        await expect(resolveAuth({})).rejects.toThrow('API key is required');
     });
 
-    it('should throw when zone is missing', () => {
+    it('should throw when zone is missing', async () => {
         process.env.MAKE_API_KEY = 'test-key';
-        expect(() => resolveAuth({})).toThrow('Zone is required');
+        await expect(resolveAuth({})).rejects.toThrow('Zone is required');
     });
 });
 
@@ -312,6 +316,32 @@ describe('CLI: buildCommands', () => {
         const scenarioCmds = program.commands.filter(c => c.name() === 'scenarios');
         expect(scenarioCmds).toHaveLength(1);
         expect(scenarioCmds[0]?.commands).toHaveLength(2);
+    });
+
+    it('should execute a tool and write formatted output to stdout', async () => {
+        const execute = jest.fn<MakeMCPTool['execute']>().mockResolvedValue([{ id: 1, name: 'Test' }]);
+
+        const program = new Command();
+        program
+            .option('--api-key <key>')
+            .option('--zone <zone>')
+            .addOption(new Option('--output <format>').choices(['json', 'compact', 'table']).default('json'));
+        buildCommands(program, [makeTool({ execute })]);
+
+        const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        process.env.MAKE_API_KEY = 'test-key';
+        process.env.MAKE_ZONE = 'eu1.make.com';
+
+        try {
+            await program.parseAsync(['scenarios', 'list'], { from: 'user' });
+
+            expect(execute).toHaveBeenCalled();
+            expect(writeSpy).toHaveBeenCalledWith(expect.stringContaining('"name": "Test"'));
+        } finally {
+            writeSpy.mockRestore();
+            delete process.env.MAKE_API_KEY;
+            delete process.env.MAKE_ZONE;
+        }
     });
 });
 

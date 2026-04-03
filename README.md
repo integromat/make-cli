@@ -39,18 +39,45 @@ sudo dpkg -i make-cli-linux-amd64.deb
 
 ## Authentication
 
-The CLI requires an API key and zone. These can be provided as flags or environment variables:
+### Login (recommended)
+
+Run the interactive login wizard to save your credentials locally:
+
+```bash
+make-cli login
+```
+
+This guides you through selecting your zone, opening the Make API keys page in your browser, and validating your key. Credentials are saved to:
+
+- **macOS / Linux**: `~/.config/make-cli/config.json`
+- **Windows**: `%APPDATA%\make-cli\config.json`
+
+Once logged in, all commands work without any extra flags. To check who you're logged in as:
+
+```bash
+make-cli whoami
+```
+
+To remove saved credentials:
+
+```bash
+make-cli logout
+```
+
+### Environment variables
 
 ```bash
 export MAKE_API_KEY="your-api-key"
 export MAKE_ZONE="eu2.make.com"
 ```
 
-Or passed directly to any command:
+### Per-command flags
 
 ```bash
 make-cli --api-key your-api-key --zone eu2.make.com scenarios list --team-id 1
 ```
+
+Flags take priority over environment variables, which take priority over saved credentials.
 
 ## Usage
 

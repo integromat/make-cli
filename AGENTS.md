@@ -9,18 +9,22 @@ This document provides instructions for AI agents on how to work with and extend
 ```
 make-cli/
 ├── src/
-│   ├── cli.ts          # Executable entry point: sets up Commander, registers all commands
+│   ├── index.ts        # Executable entry point: sets up Commander, registers all commands
 │   ├── commands.ts     # Builds CLI commands from @makehq/sdk MCP tool definitions
-│   ├── auth.ts         # Resolves API key and zone from flags or env vars
+│   ├── auth.ts         # Resolves API key and zone from flags, env vars, or config file
+│   ├── config.ts       # Reads/writes local credentials file (~/.config/make-cli/config.json)
+│   ├── login.ts        # Hand-crafted login, logout, whoami commands
 │   ├── output.ts       # Output formatting: json, compact, table
 │   ├── categories.ts   # Display titles and groupings for command categories
 │   └── version.ts      # Auto-generated version constant (from scripts/build-version.mjs)
 ├── test/
-│   └── commands.spec.ts  # Unit tests for CLI utilities and command building
+│   ├── commands.spec.ts  # Unit tests for CLI utilities and command building
+│   ├── auth.spec.ts      # Unit tests for resolveAuth config file fallback
+│   └── config.spec.ts    # Unit tests for config file path resolution and I/O
 ├── scripts/
 │   └── build-version.mjs     # Writes src/version.ts from package.json version
 └── dist/                     # Compiled output (auto-generated)
-    └── cli.js                # The executable CLI (ESM with shebang)
+    └── index.js              # The executable CLI (ESM with shebang)
 ```
 
 ## Dependency on `@makehq/sdk`
@@ -62,11 +66,35 @@ sdk-apps_get-section    → make sdk-apps get-section
 
 ### Auth resolution
 
-Every command resolves credentials via `resolveAuth()` in `src/auth.ts`:
+Every command resolves credentials via `resolveAuth()` in `src/auth.ts` (async). Priority order:
 
-- Checks `--api-key` / `--zone` flags first
-- Falls back to `MAKE_API_KEY` / `MAKE_ZONE` environment variables
-- Throws if either is missing
+1. `--api-key` / `--zone` CLI flags
+2. `MAKE_API_KEY` / `MAKE_ZONE` environment variables
+3. Local config file (see below)
+4. Throws with a message directing the user to run `make-cli login`
+
+### Local credentials file
+
+`src/config.ts` manages a JSON file at:
+
+- **macOS / Linux**: `$XDG_CONFIG_HOME/make-cli/config.json` (default: `~/.config/make-cli/config.json`)
+- **Windows**: `%APPDATA%\make-cli\config.json`
+
+File format: `{ "apiKey": "...", "zone": "eu1.make.com" }`
+
+The file is written with mode `0o600` (owner-read/write only on Unix) and uses an atomic write (write to `.tmp`, then rename).
+
+### Login commands
+
+`src/login.ts` registers three hand-crafted commands (grouped under `Others:` in `--help`) via `registerLoginCommands(program)` in `src/index.ts`:
+
+| Command            | Description                                                        |
+| ------------------ | ------------------------------------------------------------------ |
+| `make-cli login`   | Interactive wizard: select zone, open browser, paste API key, validate, save |
+| `make-cli logout`  | Removes the local credentials file                                 |
+| `make-cli whoami`  | Calls `make.users.me()` and prints `name`, `email`, and `zone`    |
+
+These are intentionally separate from `buildCommands` — they are not auto-discovered from MCP tools.
 
 ### Output formatting
 
@@ -89,30 +117,22 @@ To customize how a **category** is displayed (title, help group), update `src/ca
 
 ## Testing Patterns
 
-### Unit Tests (`test/commands.spec.ts`)
+### Unit Tests
 
-Tests cover the helper functions and command-building logic using mock tool definitions:
+Tests do **not** mock HTTP requests. All test files mock `src/config.js` so the local credentials file is never touched during tests.
 
-```typescript
-import { describe, expect, it } from '@jest/globals';
-import { Command } from 'commander';
-import { deriveActionName, camelToKebab, coerceValue, buildCommands } from '../src/commands.js';
-import { resolveAuth } from '../src/auth.js';
-import { formatOutput } from '../src/output.js';
-import type { MakeMCPTool } from '@makehq/sdk/mcp';
+**`test/commands.spec.ts`** — CLI utilities and command building:
+- `deriveActionName`, `camelToKebab`, `coerceValue`, `buildCommands`, `resolveAuth`, `formatOutput`
+- Includes one end-to-end execution test: calls `program.parseAsync()` with real args and asserts `execute` was called and output written to stdout
 
-const makeTool = (overrides: Partial<MakeMCPTool> = {}): MakeMCPTool => ({
-    name: 'scenarios_list',
-    title: 'List scenarios',
-    description: 'List all scenarios',
-    category: 'scenarios',
-    inputSchema: { type: 'object', properties: {}, required: [] },
-    execute: async () => [],
-    ...overrides,
-});
-```
+**`test/auth.spec.ts`** — `resolveAuth` config file fallback tier:
+- Verifies flags and env vars take priority over the config file
+- Verifies error message mentions `make-cli login` when no credentials are found
 
-Tests do **not** mock HTTP requests — they only test pure CLI logic (argument parsing, type coercion, output formatting, command structure).
+**`test/config.spec.ts`** — config file I/O:
+- `getConfigPath()` for each platform and env combination
+- `writeConfig` / `readConfig` round-trip
+- Handles absent file and malformed JSON gracefully
 
 ## Build and Development
 

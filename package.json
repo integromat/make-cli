@@ -1,6 +1,6 @@
 {
     "name": "@makehq/cli",
-    "version": "1.0.1",
+    "version": "1.1.0",
     "description": "A command-line tool for Make automation platform",
     "license": "MIT",
     "author": "Make",
@@ -26,8 +26,10 @@
         "dist"
     ],
     "dependencies": {
+        "@inquirer/prompts": "^8.3.2",
         "@makehq/sdk": "^1.0.1",
-        "commander": "^14.0.3"
+        "commander": "^14.0.3",
+        "open": "^11.0.0"
     },
     "devDependencies": {
         "@eslint/js": "^9.22.0",

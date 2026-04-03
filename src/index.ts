@@ -1,6 +1,7 @@
 import { Command, Option } from 'commander';
 import { MakeMCPTools } from '@makehq/sdk/mcp';
 import { buildCommands } from './commands.js';
+import { registerLoginCommands } from './login.js';
 
 declare const __VERSION__: string;
 
@@ -15,6 +16,7 @@ program
     .addOption(new Option('--output <format>', 'Output format').choices(['json', 'compact', 'table']).default('json'));
 
 buildCommands(program, MakeMCPTools);
+registerLoginCommands(program);
 
 program.parseAsync(process.argv).catch(err => {
     process.stderr.write(`Error: ${err.message}\n`);

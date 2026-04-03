@@ -130,7 +130,7 @@ function registerToolAsCommand(parent: Command, tool: MakeMCPTool, category: str
 
     cmd.action(async (localOptions: Record<string, string>) => {
         const globalOptions = cmd.optsWithGlobals();
-        const { token, zone } = resolveAuth({
+        const { token, zone } = await resolveAuth({
             apiKey: globalOptions.apiKey,
             zone: globalOptions.zone,
         });
