@@ -126,6 +126,7 @@ Commands are organized by category:
 - `folders` — Scenario Folders
 - `functions` — Custom Functions
 - `hooks` — Webhooks
+- `devices` — Devices
 
 **Credentials**
 

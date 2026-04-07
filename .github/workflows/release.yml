@@ -184,7 +184,6 @@ jobs:
     update-homebrew:
         needs: release
         runs-on: ubuntu-latest
-        if: false # temporary disabled
 
         steps:
             - name: Checkout
