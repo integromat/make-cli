@@ -4,6 +4,12 @@ A command-line interface for interacting with the [Make](https://www.make.com) a
 
 ## Installation
 
+### Homebrew
+
+```bash
+brew install integromat/tap/make-cli
+```
+
 ### npm
 
 ```bash

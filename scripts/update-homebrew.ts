@@ -13,7 +13,7 @@ function generateFormula(version: string, binaries: Record<string, string>): str
     return `# typed: false
 # frozen_string_literal: true
 
-class MakeCLI < Formula
+class MakeCli < Formula
   desc "A command-line tool for Make automation platform"
   homepage "https://www.make.com"
   version "${version}"
