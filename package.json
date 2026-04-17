@@ -1,6 +1,6 @@
 {
     "name": "@makehq/cli",
-    "version": "1.2.1",
+    "version": "1.3.0",
     "description": "A command-line tool for Make automation platform",
     "license": "MIT",
     "author": "Make",
@@ -17,7 +17,8 @@
         "build": "tsup",
         "test": "jest --coverage --coverageReporters=\"text\" --runInBand --forceExit --verbose false --testMatch \"**/test/**/*.spec.ts\"",
         "lint": "tsc && eslint --quiet .",
-        "format": "npx prettier . --write"
+        "format": "npx prettier . --write",
+        "build:docs": "npx tsx scripts/build-docs.ts"
     },
     "engines": {
         "node": ">=20"
@@ -27,7 +28,7 @@
     ],
     "dependencies": {
         "@inquirer/prompts": "^8.3.2",
-        "@makehq/sdk": "^1.1.1",
+        "@makehq/sdk": "^1.2.1",
         "commander": "^14.0.3",
         "open": "^11.0.0"
     },

@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach, jest } from '@jest/globals';
 import { Command, Option } from 'commander';
-import { deriveActionName, camelToKebab, coerceValue, buildCommands } from '../src/commands.js';
+import { deriveActionName, coerceValue, buildCommands } from '../src/commands.js';
+import { camelToKebab } from '../src/examples.js';
 import { resolveAuth } from '../src/auth.js';
 import { formatOutput } from '../src/output.js';
 import type { MakeMCPTool } from '@makehq/sdk/mcp';
@@ -200,7 +201,7 @@ describe('CLI: buildCommands', () => {
         ]);
 
         const sdkApps = program.commands.find(c => c.name() === 'sdk-apps');
-        expect((sdkApps as any).helpGroup()).toBe('Custom App Development:');
+        expect((sdkApps as any).helpGroup()).toBe('Custom app development:');
     });
 
     it('should register required options with <value> syntax', () => {

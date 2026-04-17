@@ -7,6 +7,7 @@ import { MakeError } from '@makehq/sdk';
 import { resolveAuth } from './auth.js';
 import { formatOutput, type OutputFormat } from './output.js';
 import { CATEGORY_TITLES, CATEGORY_GROUPS } from './categories.js';
+import { camelToKebab, formatExampleCommand } from './examples.js';
 
 /**
  * Derives the CLI action name from an MCP tool name and its category.
@@ -23,13 +24,6 @@ import { CATEGORY_TITLES, CATEGORY_GROUPS } from './categories.js';
 export function deriveActionName(toolName: string, category: string): string {
     const prefix = category.replace(/\./g, '-') + '_';
     return toolName.slice(prefix.length).replace(/_/g, '-');
-}
-
-/**
- * Converts a camelCase string to kebab-case.
- */
-export function camelToKebab(str: string): string {
-    return str.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`);
 }
 
 /**
@@ -126,6 +120,17 @@ function registerToolAsCommand(parent: Command, tool: MakeMCPTool, category: str
         }
 
         cmd.addOption(option);
+    }
+
+    const example = tool.examples?.[0];
+    if (example && Object.keys(example).length > 0) {
+        const slug = category.replace(/\./g, '-');
+        const exampleCmd = formatExampleCommand(`make-cli ${slug} ${actionName}`, example);
+        const indented = exampleCmd
+            .split('\n')
+            .map(l => '  ' + l)
+            .join('\n');
+        cmd.addHelpText('after', `\nExample:\n\n${indented}\n`);
     }
 
     cmd.action(async (localOptions: Record<string, string>) => {
