@@ -99,13 +99,11 @@ make-cli [options] <category> <action> [options]
 
 ### Global Options
 
-| Option            | Description                                                        |
-| ----------------- | ------------------------------------------------------------------ |
-| `-V, --version`   | Output the version number                                          |
-| `--api-key <key>` | Make API key (or set `MAKE_API_KEY`)                               |
-| `--zone <zone>`   | Make zone (e.g. `eu2.make.com`) (or set `MAKE_ZONE`)              |
-| `--output`        | Output format: `json` (default), `compact`, `table`                |
-| `-h, --help`      | Display help for the command                                       |
+| Option      | Description                                         |
+| ----------- | --------------------------------------------------- |
+| `--api-key` | Make API key                                        |
+| `--zone`    | Make zone (e.g. `eu2.make.com`)                     |
+| `--output`  | Output format: `json` (default), `compact`, `table` |
 
 ### Examples
 
@@ -135,46 +133,40 @@ Commands are organized by category:
 **Scenarios**
 
 - `scenarios` — Scenarios
-- `executions` — Scenario executions
-- `incomplete-executions` — Incomplete executions
-- `folders` — Scenario folders
-- `functions` — Custom functions
+- `executions` — Scenario Executions
+- `incomplete-executions` — Incomplete Executions
+- `folders` — Scenario Folders
+- `functions` — Custom Functions
 - `hooks` — Webhooks
 - `devices` — Devices
-- `data-structures` — Data structures
 
 **Credentials**
 
 - `connections` — Connections
 - `keys` — Keys
-- `credential-requests` — Credential requests
+- `credential-requests` — Credential Requests
 
 **Data Stores**
 
-- `data-stores` — Data stores
-- `data-store-records` — Data store records
+- `data-stores` — Data Stores
+- `data-store-records` — Data Store Records
+- `data-structures` — Data Structures
 
 **Account Management**
 
 - `teams` — Teams
 - `organizations` — Organizations
 - `users` — Users
+- `enums` — Enums
 
 **Custom App Development**
 
-- `sdk-apps` — App definitions
-- `sdk-connections` — App connections
-- `sdk-functions` — App functions
-- `sdk-modules` — App modules
-- `sdk-rpcs` — App remote procedures
-- `sdk-webhooks` — App webhooks
-
-**Others**
-
-- `enums` — Shared enumerations
-- `login` — Log in to Make by saving your API key locally
-- `logout` — Log out of Make by removing saved credentials
-- `whoami` — Show the currently authenticated Make user
+- `sdk-apps` — App Definitions
+- `sdk-connections` — App Connections
+- `sdk-functions` — App Functions
+- `sdk-modules` — App Modules
+- `sdk-rpcs` — App Remote Procedures
+- `sdk-webhooks` — App Webhooks
 
 Run `make-cli --help` or `make-cli <category> --help` for the full list of actions and options.
 
