@@ -16,6 +16,12 @@ brew install integromat/tap/make-cli
 npm install -g @makehq/cli
 ```
 
+Or run directly without installing:
+
+```bash
+npx @makehq/cli scenarios list --team-id=123
+```
+
 ### Binary releases
 
 Pre-built binaries are available for download from the [GitHub Releases](https://github.com/integromat/make-cli/releases) page:
