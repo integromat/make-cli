@@ -1,0 +1,223 @@
+name: Release
+
+on:
+    release:
+        types: [created]
+
+permissions:
+    contents: write
+
+concurrency:
+    group: release
+    cancel-in-progress: false
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        strategy:
+            matrix:
+                node-version: ['24', '22', '20']
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+            - name: Setup Node
+              uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+              with:
+                  node-version: ${{ matrix.node-version }}
+                  cache: 'npm'
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Run unit tests
+              run: npm test
+
+    build:
+        needs: test
+        strategy:
+            matrix:
+                include:
+                    - os: ubuntu-latest
+                      target: linux-x64
+                      platform: linux
+                      arch: amd64
+                    - os: ubuntu-latest
+                      target: linux-arm64
+                      platform: linux
+                      arch: arm64
+                    - os: macos-latest
+                      target: darwin-x64
+                      platform: darwin
+                      arch: amd64
+                    - os: macos-latest
+                      target: darwin-arm64
+                      platform: darwin
+                      arch: arm64
+                    - os: windows-latest
+                      target: windows-x64
+                      platform: windows
+                      arch: amd64
+
+        runs-on: ${{ matrix.os }}
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+              with:
+                  bun-version: 1
+
+            - name: Install dependencies
+              run: bun install --frozen-lockfile
+
+            - name: Build TypeScript
+              run: bun run build
+
+            - name: Build binary
+              shell: bash
+              run: |
+                  BINARY_NAME="make-cli-${{ matrix.platform }}-${{ matrix.arch }}"
+                  if [ "${{ matrix.platform }}" = "windows" ]; then
+                    bun build dist/index.js --compile --target=bun-${{ matrix.target }} --outfile="${BINARY_NAME}.exe"
+                  else
+                    bun build dist/index.js --compile --target=bun-${{ matrix.target }} --outfile="${BINARY_NAME}"
+                  fi
+
+            - name: Create tar.gz archive
+              shell: bash
+              run: |
+                  BINARY_NAME="make-cli-${{ matrix.platform }}-${{ matrix.arch }}"
+                  if [ "${{ matrix.platform }}" = "windows" ]; then
+                    tar -czvf "${BINARY_NAME}.tar.gz" "${BINARY_NAME}.exe"
+                  else
+                    tar -czvf "${BINARY_NAME}.tar.gz" "${BINARY_NAME}"
+                  fi
+
+            - name: Upload artifact
+              uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+              with:
+                  name: make-cli-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz
+                  path: make-cli-*.tar.gz
+                  retention-days: 7
+
+    build-deb:
+        needs: build
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                arch: [amd64, arm64]
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+            - name: Download linux binary
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+              with:
+                  name: make-cli-linux-${{ matrix.arch }}.tar.gz
+                  path: .
+
+            - name: Extract binary
+              run: |
+                  mkdir -p bin
+                  tar -xzvf "make-cli-linux-${{ matrix.arch }}.tar.gz" -C bin/
+
+            - name: Build Debian package
+              run: |
+                  VERSION="${GITHUB_REF_NAME#v}"
+                  ./scripts/build-deb.sh "$VERSION" "${{ matrix.arch }}"
+
+            - name: Upload artifact
+              uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+              with:
+                  name: make-cli-linux-${{ matrix.arch }}.deb
+                  path: deb/*.deb
+                  retention-days: 7
+
+    release:
+        needs: [build, build-deb]
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            id-token: write
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+              with:
+                  bun-version: latest
+
+            - name: Setup Node
+              uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+              with:
+                  node-version: 24
+                  registry-url: 'https://registry.npmjs.org'
+                  cache: 'npm'
+
+            - name: Install dependencies
+              run: bun install --frozen-lockfile
+
+            - name: Build
+              run: bun run build
+
+            - name: Publish to npm
+              run: npm publish --provenance --access public
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+            - name: Download all artifacts
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+              with:
+                  path: artifacts/
+
+            - name: Create release
+              uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
+              with:
+                  files: |
+                      artifacts/**/*
+
+    update-homebrew:
+        needs: release
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+              with:
+                  bun-version: latest
+
+            - name: Download artifacts
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+              with:
+                  path: artifacts/
+
+            - name: Generate Homebrew formula
+              run: |
+                  VERSION="${GITHUB_REF_NAME#v}"
+                  VERSION="$VERSION" ARTIFACTS_DIR="artifacts" bun run scripts/update-homebrew.ts
+
+            - name: Push to homebrew-tap
+              env:
+                  SSH_PRIVATE_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+              run: |
+                  mkdir -p ~/.ssh
+                  echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+                  chmod 600 ~/.ssh/deploy_key
+                  ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+                  git clone git@github.com:integromat/homebrew-tap.git tap --config core.sshCommand="ssh -i ~/.ssh/deploy_key"
+                  cp make-cli.rb tap/make-cli.rb
+                  cd tap
+                  git config user.name "make-cli-release-bot"
+                  git config user.email "make-cli-release-bot@make.com"
+                  git config core.sshCommand "ssh -i ~/.ssh/deploy_key"
+                  git add make-cli.rb
+                  git diff --staged --quiet || git commit -m "make-cli ${GITHUB_REF_NAME#v}"
+                  git push
