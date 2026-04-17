@@ -1,6 +1,14 @@
 import type { JSONValue } from '@makehq/sdk';
 
 /**
+ * Wraps a string in single quotes, escaping any embedded single quotes
+ * using the POSIX shell `'\''` idiom (end quote, escaped quote, reopen).
+ */
+export function shellQuote(s: string): string {
+    return `'${s.replace(/'/g, "'\\''")}'`;
+}
+
+/**
  * Converts a camelCase string to kebab-case.
  */
 export function camelToKebab(str: string): string {
@@ -28,18 +36,18 @@ export function formatExampleValue(value: JSONValue): { flat: string; expanded: 
 
         if (typeof parsed === 'object' && parsed !== null) {
             const compact = JSON.stringify(parsed);
-            const flat = `'${compact}'`;
+            const flat = shellQuote(compact);
             if (compact.length <= 60) {
                 return { flat, expanded: flat };
             }
             const pretty = JSON.stringify(parsed, null, 2);
             const prettyLines = pretty.split('\n');
             const indented = prettyLines.map((l, i) => (i === 0 ? l : '  ' + l));
-            return { flat, expanded: `'${indented.join('\n')}'` };
+            return { flat, expanded: shellQuote(indented.join('\n')) };
         }
 
         if (/[\s'"]/.test(value)) {
-            const q = `'${value}'`;
+            const q = shellQuote(value);
             return { flat: q, expanded: q };
         }
         return { flat: value, expanded: value };
@@ -47,14 +55,14 @@ export function formatExampleValue(value: JSONValue): { flat: string; expanded: 
 
     if (typeof value === 'object' && value !== null) {
         const compact = JSON.stringify(value);
-        const flat = `'${compact}'`;
+        const flat = shellQuote(compact);
         if (compact.length <= 60) {
             return { flat, expanded: flat };
         }
         const pretty = JSON.stringify(value, null, 2);
         const prettyLines = pretty.split('\n');
         const indented = prettyLines.map((l, i) => (i === 0 ? l : '  ' + l));
-        return { flat, expanded: `'${indented.join('\n')}'` };
+        return { flat, expanded: shellQuote(indented.join('\n')) };
     }
 
     const s = String(value);

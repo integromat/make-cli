@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@jest/globals';
-import { formatExampleValue, formatExampleCommand, camelToKebab } from '../src/examples.js';
+import { formatExampleValue, formatExampleCommand, camelToKebab, shellQuote } from '../src/examples.js';
 
 describe('camelToKebab', () => {
     it('should convert camelCase to kebab-case', () => {
@@ -11,6 +11,24 @@ describe('camelToKebab', () => {
     it('should leave single words unchanged', () => {
         expect(camelToKebab('name')).toBe('name');
         expect(camelToKebab('status')).toBe('status');
+    });
+});
+
+describe('shellQuote', () => {
+    it('should wrap a simple string in single quotes', () => {
+        expect(shellQuote('hello')).toBe("'hello'");
+    });
+
+    it('should escape embedded single quotes', () => {
+        expect(shellQuote("O'Reilly")).toBe("'O'\\''Reilly'");
+    });
+
+    it('should handle multiple single quotes', () => {
+        expect(shellQuote("it's a 'test'")).toBe("'it'\\''s a '\\''test'\\'''");
+    });
+
+    it('should handle strings with no single quotes unchanged', () => {
+        expect(shellQuote('no quotes here')).toBe("'no quotes here'");
     });
 });
 
@@ -31,10 +49,17 @@ describe('formatExampleValue', () => {
         });
     });
 
-    it('should quote strings with quotes', () => {
+    it('should quote strings with double quotes', () => {
         expect(formatExampleValue('say "hi"')).toEqual({
             flat: `'say "hi"'`,
             expanded: `'say "hi"'`,
+        });
+    });
+
+    it('should escape embedded single quotes in strings', () => {
+        expect(formatExampleValue("O'Reilly")).toEqual({
+            flat: "'O'\\''Reilly'",
+            expanded: "'O'\\''Reilly'",
         });
     });
 

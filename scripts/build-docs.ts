@@ -1,12 +1,13 @@
 import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { MakeMCPTools } from '@makehq/sdk/mcp';
 import type { MakeMCPTool, JSONSchema } from '@makehq/sdk/mcp';
 import { CATEGORY_TITLES, CATEGORY_GROUPS } from '../src/categories.js';
 import { camelToKebab, formatExampleCommand } from '../src/examples.js';
 import { deriveActionName } from '../src/commands.js';
 
-const DOCS_DIR = join(import.meta.dirname, '..', 'docs');
+const DOCS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'docs');
 
 function schemaTypeLabel(schema: JSONSchema): string {
     const type = Array.isArray(schema.type) ? schema.type[0] : schema.type;
