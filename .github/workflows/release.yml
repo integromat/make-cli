@@ -3,6 +3,7 @@ name: Release
 on:
     release:
         types: [created]
+    workflow_dispatch:
 
 permissions:
     contents: write
@@ -86,6 +87,64 @@ jobs:
                     bun build dist/index.js --compile --target=bun-${{ matrix.target }} --outfile="${BINARY_NAME}"
                   fi
 
+            - name: Import Apple Developer ID cert
+              if: matrix.platform == 'darwin'
+              uses: apple-actions/import-codesign-certs@b610f78488812c1e56b20e6df63ec42d833f2d14 # v6.0.0
+              with:
+                  p12-file-base64: ${{ secrets.APPLE_DEVELOPER_ID_CERT_P12 }}
+                  p12-password: ${{ secrets.APPLE_DEVELOPER_ID_CERT_PASSWORD }}
+
+            - name: Sign macOS binary
+              if: matrix.platform == 'darwin'
+              shell: bash
+              env:
+                  BINARY_NAME: make-cli-${{ matrix.platform }}-${{ matrix.arch }}
+              run: |
+                  set -euo pipefail
+
+                  codesign --remove-signature "${BINARY_NAME}" || true
+
+                  IDENTITY="$(security find-identity -v -p codesigning signing_temp \
+                      | awk -F'"' '/Developer ID Application/ { print $2; exit }')"
+                  if [ -z "${IDENTITY}" ]; then
+                      echo "::error::No 'Developer ID Application' identity found in the imported certificate"
+                      exit 1
+                  fi
+                  echo "Signing identity: ${IDENTITY}"
+
+                  codesign \
+                      --force \
+                      --options runtime \
+                      --entitlements build/entitlements.mac.plist \
+                      --timestamp \
+                      --sign "${IDENTITY}" \
+                      "${BINARY_NAME}"
+
+                  codesign --verify --strict --verbose "${BINARY_NAME}"
+                  codesign -dv --verbose=4 "${BINARY_NAME}"
+
+            - name: Notarize macOS binary
+              if: matrix.platform == 'darwin'
+              shell: bash
+              env:
+                  BINARY_NAME: make-cli-${{ matrix.platform }}-${{ matrix.arch }}
+                  APPLE_ID: ${{ secrets.APPLE_ID }}
+                  APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+                  APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+              run: |
+                  set -euo pipefail
+
+                  ZIP_PATH="${BINARY_NAME}.notarize.zip"
+                  ditto -c -k --keepParent "${BINARY_NAME}" "${ZIP_PATH}"
+
+                  xcrun notarytool submit "${ZIP_PATH}" \
+                      --apple-id "${APPLE_ID}" \
+                      --team-id "${APPLE_TEAM_ID}" \
+                      --password "${APPLE_APP_PASSWORD}" \
+                      --wait
+
+                  rm -f "${ZIP_PATH}"
+
             - name: Create tar.gz archive
               shell: bash
               run: |
@@ -105,6 +164,7 @@ jobs:
 
     build-deb:
         needs: build
+        if: github.event_name == 'release'
         runs-on: ubuntu-latest
         strategy:
             matrix:
@@ -139,6 +199,7 @@ jobs:
 
     release:
         needs: [build, build-deb]
+        if: github.event_name == 'release'
         runs-on: ubuntu-latest
         permissions:
             contents: write
@@ -183,6 +244,7 @@ jobs:
 
     update-homebrew:
         needs: release
+        if: github.event_name == 'release'
         runs-on: ubuntu-latest
 
         steps:
