@@ -94,29 +94,35 @@ Flags take priority over environment variables, which take priority over saved c
 ## Usage
 
 ```
-make-cli [options] <category> <action> [options]
+make-cli [options] <category> <action> [resource-id] [options]
 ```
 
 ### Global Options
 
-| Option            | Description                                                        |
-| ----------------- | ------------------------------------------------------------------ |
-| `-V, --version`   | Output the version number                                          |
-| `--api-key <key>` | Make API key (or set `MAKE_API_KEY`)                               |
-| `--zone <zone>`   | Make zone (e.g. `eu2.make.com`) (or set `MAKE_ZONE`)              |
-| `--output`        | Output format: `json` (default), `compact`, `table`                |
-| `-h, --help`      | Display help for the command                                       |
+| Option            | Description                                          |
+| ----------------- | ---------------------------------------------------- |
+| `-V, --version`   | Output the version number                            |
+| `--api-key <key>` | Make API key (or set `MAKE_API_KEY`)                 |
+| `--zone <zone>`   | Make zone (e.g. `eu2.make.com`) (or set `MAKE_ZONE`) |
+| `--output`        | Output format: `json` (default), `compact`, `table`  |
+| `-h, --help`      | Display help for the command                         |
 
 ### Examples
 
 ```bash
+# Listing — scope is always a named flag
 make-cli scenarios list --team-id=123
-make-cli scenarios get --scenario-id=456
 make-cli connections list --team-id=123
 make-cli data-stores list --team-id=123
 make-cli data-store-records list --data-store-id=1
 make-cli teams list --organization-id=1
-make-cli users me
+
+# Resource-level actions — resource id as positional argument
+make-cli scenarios get 456
+make-cli data-structures get 178
+make-cli data-store-records update ecc4819b2260 \
+  --data-store-id=137 \
+  --data='{"status":"inactive"}'
 
 # Creating a scenario
 make-cli scenarios create \
@@ -127,6 +133,23 @@ make-cli scenarios create \
 # Output formatting
 make-cli scenarios list --team-id=123 --output=table
 ```
+
+### Resource IDs
+
+Resource-level actions (`get`, `update`, `delete`, and similar) accept the resource's own ID as a **positional argument**. The long-form flag is still available for scripting or when you prefer being explicit — both forms are equivalent:
+
+```bash
+make-cli scenarios get 456
+make-cli scenarios get --scenario-id=456
+```
+
+Parent scopes (e.g. `--team-id`, `--organization-id`, or `--scenario-id` on nested resources) stay as named flags, so only the resource's own id is positional:
+
+```bash
+make-cli executions get a07e16f2ad134bf49cf83a00aa95c0a5 --scenario-id=925
+```
+
+Collection-level actions (`list`, `create`, ...) have no positional ID — every input is a named flag.
 
 ### Commands
 

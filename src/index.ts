@@ -1,5 +1,5 @@
 import { Command, Option } from 'commander';
-import { MakeMCPTools } from '@makehq/sdk/mcp';
+import { MakeTools } from '@makehq/sdk/tools';
 import { buildCommands } from './commands.js';
 import { registerLoginCommands } from './login.js';
 
@@ -15,7 +15,7 @@ program
     .option('--zone <zone>', 'Make zone, e.g. eu1.make.com (or set MAKE_ZONE)')
     .addOption(new Option('--output <format>', 'Output format').choices(['json', 'compact', 'table']).default('json'));
 
-buildCommands(program, MakeMCPTools);
+buildCommands(program, MakeTools);
 registerLoginCommands(program);
 
 program.parseAsync(process.argv).catch(err => {

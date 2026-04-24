@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import { Command as CommandClass } from 'commander';
-import type { MakeMCPTool, JSONSchema } from '@makehq/sdk/mcp';
+import type { MakeTool, JSONSchema } from '@makehq/sdk/tools';
 import type { JSONValue } from '@makehq/sdk';
 import { Make } from '@makehq/sdk';
 import { MakeError } from '@makehq/sdk';
@@ -10,7 +10,7 @@ import { CATEGORY_TITLES, CATEGORY_GROUPS } from './categories.js';
 import { camelToKebab, formatExampleCommand } from './examples.js';
 
 /**
- * Derives the CLI action name from an MCP tool name and its category.
+ * Derives the CLI action name from a Make SDK tool name and its category.
  *
  * Tool names follow the pattern `{category}_{action}` where dots in the category
  * are replaced with hyphens (e.g., 'sdk.apps' → 'sdk-apps').
@@ -27,10 +27,26 @@ export function deriveActionName(toolName: string, category: string): string {
 }
 
 /**
- * Converts a kebab-case string to camelCase.
+ * Returns the input-schema property name that represents the tool's own
+ * resource ID and should be exposed as a positional argument on the CLI.
+ * Returns undefined when no positional form should apply.
+ *
+ * The SDK declares this property via `tool.resourceId`. It is distinct from
+ * `tool.scopeId`, which names the parent/scope ID used for routing and
+ * access control. A single tool may have both — e.g. `executions_get` has
+ * `scopeId = 'scenarioId'` and `resourceId = 'executionId'`, so the command
+ * is invoked as `executions get <executionId> --scenario-id=<scenarioId>`.
+ *
+ * We skip positional registration when:
+ *   - `tool.resourceId` is unset (collection-level actions like list/create).
+ *   - `tool.resourceId` points at a property that doesn't exist in the schema
+ *     (guards against SDK definition drift).
  */
-function kebabToCamel(str: string): string {
-    return str.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+export function deriveSelfIdentifier(tool: MakeTool): string | undefined {
+    const resourceId = tool.resourceId;
+    if (!resourceId) return undefined;
+    const properties = tool.inputSchema.properties ?? {};
+    return resourceId in properties ? resourceId : undefined;
 }
 
 /**
@@ -84,22 +100,34 @@ function getOrCreateSubcommand(parent: Command, name: string, description: strin
 }
 
 /**
- * Registers an MCP tool as a CLI command on a parent Commander command.
+ * Registers a Make SDK tool as a CLI command on a parent Commander command.
+ *
+ * When the tool declares a `resourceId` that points at a schema property, the
+ * command exposes that value both as a long-form flag (e.g.
+ * `--data-structure-id=178`) and as an optional positional argument (e.g.
+ * `data-structures get 178`). The positional is marked optional in Commander
+ * so either invocation style parses cleanly; we then enforce presence
+ * (when the schema requires it) and reject ambiguous duplication ourselves.
  */
-function registerToolAsCommand(parent: Command, tool: MakeMCPTool, category: string): void {
+function registerToolAsCommand(parent: Command, tool: MakeTool, category: string): void {
     const actionName = deriveActionName(tool.name, category);
     const cmd = parent.command(actionName).description(tool.description);
 
     const properties = tool.inputSchema.properties ?? {};
     const required = new Set(tool.inputSchema.required ?? []);
+    const selfIdProperty = deriveSelfIdentifier(tool);
+    const selfIdSchema = selfIdProperty ? properties[selfIdProperty] : undefined;
+    const selfIdRequired = selfIdProperty ? required.has(selfIdProperty) : false;
+    const selfIdFlag = selfIdProperty ? `--${camelToKebab(selfIdProperty)}` : undefined;
 
     for (const [propName, schema] of Object.entries(properties)) {
         const flagName = camelToKebab(propName);
         const type = Array.isArray(schema.type) ? schema.type[0] : schema.type;
 
         const isRequired = required.has(propName);
-
         const isBooleanFlag = type === 'boolean';
+        const isSelfId = propName === selfIdProperty;
+
         const flag = isBooleanFlag
             ? schema.default === true
                 ? `--no-${flagName}`
@@ -108,7 +136,10 @@ function registerToolAsCommand(parent: Command, tool: MakeMCPTool, category: str
 
         const option = cmd.createOption(flag, schema.description ?? '');
 
-        if (isRequired && !isBooleanFlag) {
+        // Self-id properties accept either the flag or the positional argument,
+        // so we deliberately skip Commander's built-in required-flag check and
+        // do our own validation in the action (see below).
+        if (isRequired && !isBooleanFlag && !isSelfId) {
             option.makeOptionMandatory(true);
         }
         if (schema.enum) {
@@ -122,10 +153,15 @@ function registerToolAsCommand(parent: Command, tool: MakeMCPTool, category: str
         cmd.addOption(option);
     }
 
+    if (selfIdProperty) {
+        const argName = camelToKebab(selfIdProperty);
+        cmd.argument(`[${argName}]`, selfIdSchema?.description ?? '');
+    }
+
     const example = tool.examples?.[0];
     if (example && Object.keys(example).length > 0) {
         const slug = category.replace(/\./g, '-');
-        const exampleCmd = formatExampleCommand(`make-cli ${slug} ${actionName}`, example);
+        const exampleCmd = formatExampleCommand(`make-cli ${slug} ${actionName}`, example, selfIdProperty);
         const indented = exampleCmd
             .split('\n')
             .map(l => '  ' + l)
@@ -133,7 +169,23 @@ function registerToolAsCommand(parent: Command, tool: MakeMCPTool, category: str
         cmd.addHelpText('after', `\nExample:\n\n${indented}\n`);
     }
 
-    cmd.action(async (localOptions: Record<string, string>) => {
+    const handler = async (positional: string | undefined, localOptions: Record<string, string>): Promise<void> => {
+        if (selfIdProperty && selfIdFlag) {
+            const fromFlag = localOptions[selfIdProperty];
+            if (positional !== undefined && fromFlag !== undefined) {
+                process.stderr.write(
+                    `Error: ${selfIdFlag} was supplied both positionally and as a flag; pass it only one way.\n`,
+                );
+                process.exit(1);
+            }
+            if (positional === undefined && fromFlag === undefined && selfIdRequired) {
+                process.stderr.write(
+                    `Error: missing required argument — pass the resource ID positionally or via ${selfIdFlag}.\n`,
+                );
+                process.exit(1);
+            }
+        }
+
         const globalOptions = cmd.optsWithGlobals();
         const { token, zone } = await resolveAuth({
             apiKey: globalOptions.apiKey,
@@ -145,13 +197,16 @@ function registerToolAsCommand(parent: Command, tool: MakeMCPTool, category: str
 
         for (const [key, value] of Object.entries(localOptions)) {
             if (value === undefined) continue;
-            const camelKey = kebabToCamel(key);
-            const schema = properties[camelKey];
+            const schema = properties[key];
             if (schema) {
-                args[camelKey] = coerceValue(String(value), schema);
+                args[key] = coerceValue(String(value), schema);
             } else {
-                args[camelKey] = value;
+                args[key] = value;
             }
+        }
+
+        if (selfIdProperty && positional !== undefined && selfIdSchema) {
+            args[selfIdProperty] = coerceValue(positional, selfIdSchema);
         }
 
         try {
@@ -170,15 +225,23 @@ function registerToolAsCommand(parent: Command, tool: MakeMCPTool, category: str
                 process.exit(1);
             }
         }
-    });
+    };
+
+    if (selfIdProperty) {
+        cmd.action((positional: string | undefined, localOptions: Record<string, string>) =>
+            handler(positional, localOptions),
+        );
+    } else {
+        cmd.action((localOptions: Record<string, string>) => handler(undefined, localOptions));
+    }
 }
 
 /**
- * Builds all CLI commands from MCP tool definitions.
+ * Builds all CLI commands from Make SDK tool definitions.
  * Groups tools by category and creates nested subcommands.
  */
-export function buildCommands(program: Command, tools: MakeMCPTool[]): void {
-    const categories = new Map<string, MakeMCPTool[]>();
+export function buildCommands(program: Command, tools: MakeTool[]): void {
+    const categories = new Map<string, MakeTool[]>();
 
     for (const tool of tools) {
         const group = categories.get(tool.category) ?? [];

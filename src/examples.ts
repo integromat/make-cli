@@ -73,13 +73,33 @@ export function formatExampleValue(value: JSONValue): { flat: string; expanded: 
  * Builds a formatted shell example command from a base command and an example payload.
  * Uses single-line format when the result fits within 80 characters,
  * otherwise switches to multi-line with backslash continuations.
+ *
+ * When `positionalKey` is provided and present in the example, its value is
+ * rendered as a positional argument (placed right after the command) instead
+ * of a `--flag=value` pair. The key is removed from the flag section so the
+ * same value isn't emitted twice.
  */
-export function formatExampleCommand(command: string, example: Record<string, JSONValue>): string {
+export function formatExampleCommand(
+    command: string,
+    example: Record<string, JSONValue>,
+    positionalKey?: string,
+): string {
     const entries = Object.entries(example).filter(([, v]) => v !== false);
     if (entries.length === 0) return command;
 
+    let head = command;
+    const flagEntries = entries.filter(([name]) => name !== positionalKey);
+
+    if (positionalKey && positionalKey in example) {
+        const value = example[positionalKey]!;
+        const positional = typeof value === 'boolean' ? String(value) : formatExampleValue(value).flat;
+        head = `${command} ${positional}`;
+    }
+
+    if (flagEntries.length === 0) return head;
+
     const args: { flat: string; expanded: string }[] = [];
-    for (const [name, value] of entries) {
+    for (const [name, value] of flagEntries) {
         const flag = `--${camelToKebab(name)}`;
         if (typeof value === 'boolean') {
             args.push({ flat: flag, expanded: flag });
@@ -92,14 +112,14 @@ export function formatExampleCommand(command: string, example: Record<string, JS
         }
     }
 
-    const singleLine = `${command} ${args.map(a => a.flat).join(' ')}`;
+    const singleLine = `${head} ${args.map(a => a.flat).join(' ')}`;
     const hasMultiLine = args.some(a => a.expanded.includes('\n'));
 
     if (!hasMultiLine && singleLine.length <= 80) {
         return singleLine;
     }
 
-    const blocks = [command, ...args.map(a => `  ${a.expanded}`)];
+    const blocks = [head, ...args.map(a => `  ${a.expanded}`)];
     const parts: string[] = [];
     for (let i = 0; i < blocks.length; i++) {
         if (i < blocks.length - 1) {

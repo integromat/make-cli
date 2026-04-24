@@ -1,10 +1,10 @@
 import { describe, expect, it, beforeEach, afterEach, jest } from '@jest/globals';
 import { Command, Option } from 'commander';
-import { deriveActionName, coerceValue, buildCommands } from '../src/commands.js';
+import { deriveActionName, coerceValue, buildCommands, deriveSelfIdentifier } from '../src/commands.js';
 import { camelToKebab } from '../src/examples.js';
 import { resolveAuth } from '../src/auth.js';
 import { formatOutput } from '../src/output.js';
-import type { MakeMCPTool } from '@makehq/sdk/mcp';
+import type { MakeTool } from '@makehq/sdk/tools';
 
 jest.mock('../src/config.js', () => ({
     readConfig: jest.fn<() => Promise<null>>().mockResolvedValue(null),
@@ -147,7 +147,7 @@ describe('CLI: resolveAuth', () => {
 });
 
 describe('CLI: buildCommands', () => {
-    const makeTool = (overrides: Partial<MakeMCPTool> = {}): MakeMCPTool => ({
+    const makeTool = (overrides: Partial<MakeTool> = {}): MakeTool => ({
         name: 'scenarios_list',
         title: 'List scenarios',
         description: 'List all scenarios',
@@ -320,7 +320,7 @@ describe('CLI: buildCommands', () => {
     });
 
     it('should execute a tool and write formatted output to stdout', async () => {
-        const execute = jest.fn<MakeMCPTool['execute']>().mockResolvedValue([{ id: 1, name: 'Test' }]);
+        const execute = jest.fn<MakeTool['execute']>().mockResolvedValue([{ id: 1, name: 'Test' }]);
 
         const program = new Command();
         program
@@ -343,6 +343,348 @@ describe('CLI: buildCommands', () => {
             delete process.env.MAKE_API_KEY;
             delete process.env.MAKE_ZONE;
         }
+    });
+});
+
+describe('CLI: deriveSelfIdentifier', () => {
+    const makeTool = (overrides: Partial<MakeTool>): MakeTool => ({
+        name: 'x_y',
+        title: 'x',
+        description: 'x',
+        category: 'x',
+        inputSchema: { type: 'object', properties: {}, required: [] },
+        execute: async () => null,
+        ...overrides,
+    });
+
+    const withResource = (resourceId: string, extra: Partial<MakeTool> = {}): MakeTool =>
+        makeTool({
+            resourceId,
+            inputSchema: {
+                type: 'object',
+                properties: { [resourceId]: { type: 'number', description: `${resourceId}` } },
+                required: [resourceId],
+            },
+            ...extra,
+        });
+
+    it('returns the resourceId when the schema declares that property', () => {
+        expect(deriveSelfIdentifier(withResource('dataStructureId'))).toBe('dataStructureId');
+        expect(deriveSelfIdentifier(withResource('scenarioId'))).toBe('scenarioId');
+        expect(deriveSelfIdentifier(withResource('requestId'))).toBe('requestId');
+        expect(deriveSelfIdentifier(withResource('key'))).toBe('key');
+    });
+
+    it('returns the resourceId even when it is literally `id`', () => {
+        // Under the positional model there is no alias collision to guard against:
+        // a positional arg named [id] coexists fine with a `--id <value>` option.
+        expect(deriveSelfIdentifier(withResource('id'))).toBe('id');
+    });
+
+    it('returns the resourceId when the schema also defines an unrelated `id` property', () => {
+        // The old alias model skipped this case to avoid a `--id` flag collision.
+        // Positional + `--id` option have no name collision, so we no longer skip.
+        expect(
+            deriveSelfIdentifier(
+                makeTool({
+                    resourceId: 'dataStructureId',
+                    inputSchema: {
+                        type: 'object',
+                        properties: {
+                            id: { type: 'string', description: 'Unrelated id field' },
+                            dataStructureId: { type: 'number', description: 'Data structure id' },
+                        },
+                        required: ['dataStructureId'],
+                    },
+                }),
+            ),
+        ).toBe('dataStructureId');
+    });
+
+    it('returns the resourceId when tool.scopeId points at a different parent-scope property', () => {
+        expect(
+            deriveSelfIdentifier(
+                makeTool({
+                    name: 'executions_get',
+                    category: 'executions',
+                    scopeId: 'scenarioId',
+                    resourceId: 'executionId',
+                    inputSchema: {
+                        type: 'object',
+                        properties: {
+                            scenarioId: { type: 'number', description: 'Parent scenario' },
+                            executionId: { type: 'string', description: 'Execution id' },
+                        },
+                        required: ['scenarioId', 'executionId'],
+                    },
+                }),
+            ),
+        ).toBe('executionId');
+    });
+
+    it('returns undefined when resourceId is not set (collection-level actions)', () => {
+        expect(
+            deriveSelfIdentifier(
+                makeTool({
+                    scopeId: 'teamId',
+                    inputSchema: {
+                        type: 'object',
+                        properties: { teamId: { type: 'number', description: 'Team id' } },
+                        required: ['teamId'],
+                    },
+                }),
+            ),
+        ).toBeUndefined();
+    });
+
+    it('returns undefined when resourceId points at a property that is missing from the schema', () => {
+        expect(
+            deriveSelfIdentifier(
+                makeTool({
+                    resourceId: 'missingId',
+                    inputSchema: { type: 'object', properties: {}, required: [] },
+                }),
+            ),
+        ).toBeUndefined();
+    });
+});
+
+describe('CLI: positional argument for self identifiers', () => {
+    const makeTool = (overrides: Partial<MakeTool> = {}): MakeTool => ({
+        name: 'data-structures_get',
+        title: 'Get data structure',
+        description: 'Get details of a specific data structure.',
+        category: 'data-structures',
+        scopeId: 'dataStructureId',
+        resourceId: 'dataStructureId',
+        inputSchema: {
+            type: 'object',
+            properties: { dataStructureId: { type: 'number', description: 'The data structure ID to retrieve' } },
+            required: ['dataStructureId'],
+        },
+        execute: async () => null,
+        ...overrides,
+    });
+
+    const getCommand = (program: Command, category: string, action: string) =>
+        program.commands.find(c => c.name() === category)?.commands.find(c => c.name() === action);
+
+    const getOption = (program: Command, category: string, action: string, longFlag: string) =>
+        getCommand(program, category, action)?.options.find(o => o.long === longFlag);
+
+    const buildProgramWithTool = (tool: MakeTool): Command => {
+        const program = new Command();
+        program
+            .option('--api-key <key>')
+            .option('--zone <zone>')
+            .addOption(new Option('--output <format>').choices(['json', 'compact', 'table']).default('json'));
+        buildCommands(program, [tool]);
+        return program;
+    };
+
+    it('registers an optional positional argument when resourceId is declared', () => {
+        const program = new Command();
+        buildCommands(program, [makeTool()]);
+
+        const cmd = getCommand(program, 'data-structures', 'get');
+        expect(cmd).toBeDefined();
+
+        const args = cmd!.registeredArguments;
+        expect(args).toHaveLength(1);
+        expect(args[0]?.name()).toBe('data-structure-id');
+        expect(args[0]?.required).toBe(false);
+        expect(args[0]?.description).toBe('The data structure ID to retrieve');
+    });
+
+    it('keeps the long-form flag but does not make it mandatory at the Commander level', () => {
+        const program = new Command();
+        buildCommands(program, [makeTool()]);
+
+        const opt = getOption(program, 'data-structures', 'get', '--data-structure-id');
+        expect(opt).toBeDefined();
+        expect(opt?.flags).toBe('--data-structure-id <value>');
+        expect(opt?.mandatory).toBe(false);
+    });
+
+    it('does not register any `--id` flag', () => {
+        const program = new Command();
+        buildCommands(program, [makeTool()]);
+
+        const idOpt = getOption(program, 'data-structures', 'get', '--id');
+        expect(idOpt).toBeUndefined();
+
+        const opt = getOption(program, 'data-structures', 'get', '--data-structure-id');
+        expect(opt?.short).toBeUndefined();
+    });
+
+    it('does not register a positional on collection-level commands (no resourceId)', () => {
+        const program = new Command();
+        buildCommands(program, [
+            makeTool({
+                name: 'data-structures_list',
+                scopeId: 'teamId',
+                resourceId: undefined,
+                inputSchema: {
+                    type: 'object',
+                    properties: { teamId: { type: 'number', description: 'Team ID' } },
+                    required: ['teamId'],
+                },
+            }),
+        ]);
+
+        const cmd = getCommand(program, 'data-structures', 'list');
+        expect(cmd!.registeredArguments).toHaveLength(0);
+
+        const teamOpt = getOption(program, 'data-structures', 'list', '--team-id');
+        expect(teamOpt?.mandatory).toBe(true);
+    });
+
+    it('registers only the resource id positionally when a scope flag is also required', () => {
+        const program = new Command();
+        buildCommands(program, [
+            makeTool({
+                name: 'executions_get',
+                category: 'executions',
+                scopeId: 'scenarioId',
+                resourceId: 'executionId',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        scenarioId: { type: 'number', description: 'Parent scenario ID' },
+                        executionId: { type: 'string', description: 'Execution ID' },
+                    },
+                    required: ['scenarioId', 'executionId'],
+                },
+            }),
+        ]);
+
+        const cmd = getCommand(program, 'executions', 'get');
+        expect(cmd!.registeredArguments.map(a => a.name())).toEqual(['execution-id']);
+
+        const scenarioOpt = getOption(program, 'executions', 'get', '--scenario-id');
+        expect(scenarioOpt?.mandatory).toBe(true);
+
+        const executionOpt = getOption(program, 'executions', 'get', '--execution-id');
+        expect(executionOpt?.mandatory).toBe(false);
+    });
+
+    it('passes the positional value to execute under the original schema property name (with type coercion)', async () => {
+        const execute = jest.fn<MakeTool['execute']>().mockResolvedValue({ ok: true });
+        const program = buildProgramWithTool(makeTool({ execute }));
+
+        const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        process.env.MAKE_API_KEY = 'test-key';
+        process.env.MAKE_ZONE = 'eu1.make.com';
+
+        try {
+            await program.parseAsync(['data-structures', 'get', '178'], { from: 'user' });
+            expect(execute).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ dataStructureId: 178 }));
+        } finally {
+            writeSpy.mockRestore();
+            delete process.env.MAKE_API_KEY;
+            delete process.env.MAKE_ZONE;
+        }
+    });
+
+    it('still accepts the long-form flag and coerces the value identically', async () => {
+        const execute = jest.fn<MakeTool['execute']>().mockResolvedValue({ ok: true });
+        const program = buildProgramWithTool(makeTool({ execute }));
+
+        const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        process.env.MAKE_API_KEY = 'test-key';
+        process.env.MAKE_ZONE = 'eu1.make.com';
+
+        try {
+            await program.parseAsync(['data-structures', 'get', '--data-structure-id=178'], { from: 'user' });
+            expect(execute).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ dataStructureId: 178 }));
+        } finally {
+            writeSpy.mockRestore();
+            delete process.env.MAKE_API_KEY;
+            delete process.env.MAKE_ZONE;
+        }
+    });
+
+    it('errors when the resource id is supplied both positionally and via the flag', async () => {
+        const execute = jest.fn<MakeTool['execute']>().mockResolvedValue({ ok: true });
+        const program = buildProgramWithTool(makeTool({ execute }));
+
+        const stderrSpy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+            throw new Error(`__exit:${code ?? 0}__`);
+        }) as never);
+
+        process.env.MAKE_API_KEY = 'test-key';
+        process.env.MAKE_ZONE = 'eu1.make.com';
+
+        try {
+            await expect(
+                program.parseAsync(['data-structures', 'get', '178', '--data-structure-id=999'], { from: 'user' }),
+            ).rejects.toThrow('__exit:1__');
+
+            expect(execute).not.toHaveBeenCalled();
+            expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('--data-structure-id was supplied both'));
+        } finally {
+            stderrSpy.mockRestore();
+            exitSpy.mockRestore();
+            delete process.env.MAKE_API_KEY;
+            delete process.env.MAKE_ZONE;
+        }
+    });
+
+    it('errors when the resource id is required but neither positional nor flag is provided', async () => {
+        const execute = jest.fn<MakeTool['execute']>().mockResolvedValue({ ok: true });
+        const program = buildProgramWithTool(makeTool({ execute }));
+
+        const stderrSpy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+            throw new Error(`__exit:${code ?? 0}__`);
+        }) as never);
+
+        process.env.MAKE_API_KEY = 'test-key';
+        process.env.MAKE_ZONE = 'eu1.make.com';
+
+        try {
+            await expect(program.parseAsync(['data-structures', 'get'], { from: 'user' })).rejects.toThrow(
+                '__exit:1__',
+            );
+
+            expect(execute).not.toHaveBeenCalled();
+            expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('missing required argument'));
+        } finally {
+            stderrSpy.mockRestore();
+            exitSpy.mockRestore();
+            delete process.env.MAKE_API_KEY;
+            delete process.env.MAKE_ZONE;
+        }
+    });
+
+    it('renders the example with the resource id as a positional argument', () => {
+        const program = new Command();
+        buildCommands(program, [makeTool({ examples: [{ dataStructureId: 178 }] })]);
+
+        const cmd = getCommand(program, 'data-structures', 'get');
+        let captured = '';
+        cmd?.configureOutput({ writeOut: (s: string) => (captured += s) });
+        cmd?.outputHelp();
+
+        expect(captured).toContain('make-cli data-structures get 178');
+        expect(captured).not.toContain('--data-structure-id=178');
+        expect(captured).not.toContain('--id=178');
+    });
+
+    it('shows the positional argument in the Usage line and in an Arguments section', () => {
+        const program = new Command();
+        buildCommands(program, [makeTool()]);
+
+        const cmd = getCommand(program, 'data-structures', 'get');
+        let captured = '';
+        cmd?.configureOutput({ writeOut: (s: string) => (captured += s) });
+        cmd?.outputHelp();
+
+        // Commander pads the Usage line with extra spaces when the root program
+        // has no name; match the meaningful bits with a loose regex.
+        expect(captured).toMatch(/Usage:\s+data-structures get \[options\] \[data-structure-id\]/);
+        expect(captured).toMatch(/Arguments:\s+data-structure-id\s+The data structure ID to retrieve/);
     });
 });
 

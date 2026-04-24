@@ -1,11 +1,11 @@
 import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { MakeMCPTools } from '@makehq/sdk/mcp';
-import type { MakeMCPTool, JSONSchema } from '@makehq/sdk/mcp';
+import { MakeTools } from '@makehq/sdk/tools';
+import type { MakeTool, JSONSchema } from '@makehq/sdk/tools';
 import { CATEGORY_TITLES, CATEGORY_GROUPS } from '../src/categories.js';
 import { camelToKebab, formatExampleCommand } from '../src/examples.js';
-import { deriveActionName } from '../src/commands.js';
+import { deriveActionName, deriveSelfIdentifier } from '../src/commands.js';
 
 const DOCS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'docs');
 
@@ -18,7 +18,7 @@ function schemaTypeLabel(schema: JSONSchema): string {
     return type ?? 'string';
 }
 
-function buildToolSection(tool: MakeMCPTool, categorySlug: string): string {
+function buildToolSection(tool: MakeTool, categorySlug: string): string {
     const action = deriveActionName(tool.name, tool.category);
     const lines: string[] = [];
 
@@ -30,27 +30,47 @@ function buildToolSection(tool: MakeMCPTool, categorySlug: string): string {
     const properties = tool.inputSchema.properties ?? {};
     const required = new Set(tool.inputSchema.required ?? []);
     const propEntries = Object.entries(properties);
+    const selfIdProperty = deriveSelfIdentifier(tool);
+    const selfIdSchema = selfIdProperty ? properties[selfIdProperty] : undefined;
+    const selfIdFlag = selfIdProperty ? `--${camelToKebab(selfIdProperty)}` : undefined;
 
-    if (propEntries.length > 0) {
+    if (selfIdProperty && selfIdSchema && selfIdFlag) {
+        const argName = camelToKebab(selfIdProperty);
+        const isRequired = required.has(selfIdProperty);
+        const rawDesc = selfIdSchema.description?.replace(/\|/g, '\\|').replace(/\n/g, ' ').trim() ?? '';
+        // SDK descriptions generally omit trailing punctuation; normalize to a
+        // single '.' so the cross-reference clause reads as a second sentence.
+        const baseDesc = rawDesc ? rawDesc.replace(/[.!?]+$/, '') + '.' : '';
+        const desc = baseDesc
+            ? `${baseDesc} Can also be passed as \`${selfIdFlag}=<value>\`.`
+            : `Can also be passed as \`${selfIdFlag}=<value>\`.`;
+
+        lines.push('**Arguments**');
+        lines.push('');
+        lines.push('| Argument | Description | Required |');
+        lines.push('|----------|-------------|----------|');
+        lines.push(`| \`<${argName}>\` | ${desc} | ${isRequired ? 'Yes' : 'No'} |`);
+        lines.push('');
+    }
+
+    const flagEntries = propEntries.filter(([propName]) => propName !== selfIdProperty);
+
+    if (flagEntries.length > 0) {
         lines.push('**Options**');
         lines.push('');
         lines.push('| Option | Description | Required |');
         lines.push('|--------|-------------|----------|');
 
-        for (const [propName, schema] of propEntries) {
+        for (const [propName, schema] of flagEntries) {
             const flagName = camelToKebab(propName);
             const type = schemaTypeLabel(schema);
             const isBooleanFlag = type === 'boolean';
-            const flag = isBooleanFlag
-                ? schema.default === true
-                    ? `--no-${flagName}`
-                    : `--${flagName}`
-                : `--${flagName}`;
+            const longForm = isBooleanFlag && schema.default === true ? `--no-${flagName}` : `--${flagName}`;
 
             const isRequired = required.has(propName) && !isBooleanFlag;
             const propDesc = schema.description?.replace(/\|/g, '\\|').replace(/\n/g, ' ') ?? '';
 
-            lines.push(`| \`${flag}\` | ${propDesc} | ${isRequired ? 'Yes' : 'No'} |`);
+            lines.push(`| \`${longForm}\` | ${propDesc} | ${isRequired ? 'Yes' : 'No'} |`);
         }
 
         lines.push('');
@@ -63,7 +83,7 @@ function buildToolSection(tool: MakeMCPTool, categorySlug: string): string {
     const cmd = `make-cli ${categorySlug} ${action}`;
     const example = tool.examples?.[0];
     if (example && Object.keys(example).length > 0) {
-        lines.push(formatExampleCommand(cmd, example));
+        lines.push(formatExampleCommand(cmd, example, selfIdProperty));
     } else {
         lines.push(cmd);
     }
@@ -73,7 +93,7 @@ function buildToolSection(tool: MakeMCPTool, categorySlug: string): string {
     return lines.join('\n');
 }
 
-function buildCategoryDoc(categorySlug: string, tools: MakeMCPTool[]): string {
+function buildCategoryDoc(categorySlug: string, tools: MakeTool[]): string {
     const originalCategory = tools[0]!.category;
     const title = CATEGORY_TITLES[originalCategory] ?? categorySlug;
     const lines: string[] = [];
@@ -98,7 +118,7 @@ function buildCategoryDoc(categorySlug: string, tools: MakeMCPTool[]): string {
     return lines.join('\n');
 }
 
-function buildIndex(categoryMap: Map<string, MakeMCPTool[]>): string {
+function buildIndex(categoryMap: Map<string, MakeTool[]>): string {
     const lines: string[] = [];
 
     lines.push('# Make CLI Documentation');
@@ -160,9 +180,9 @@ function buildIndex(categoryMap: Map<string, MakeMCPTool[]>): string {
 
 // --- Main ---
 
-const categoryMap = new Map<string, MakeMCPTool[]>();
+const categoryMap = new Map<string, MakeTool[]>();
 
-for (const tool of MakeMCPTools) {
+for (const tool of MakeTools) {
     const slug = tool.category.replace(/\./g, '-');
     const group = categoryMap.get(slug) ?? [];
     group.push(tool);
@@ -181,6 +201,6 @@ for (const [slug, tools] of categoryMap) {
 const index = buildIndex(categoryMap);
 writeFileSync(join(DOCS_DIR, 'README.md'), index);
 
-const totalTools = MakeMCPTools.length;
+const totalTools = MakeTools.length;
 const totalCategories = categoryMap.size;
 console.log(`Generated docs for ${totalTools} commands across ${totalCategories} categories in docs/`);
