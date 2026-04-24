@@ -1,4 +1,4 @@
-import type { Command } from 'commander';
+import type { Command, OptionValues } from 'commander';
 import { Command as CommandClass } from 'commander';
 import type { MakeTool, JSONSchema } from '@makehq/sdk/tools';
 import type { JSONValue } from '@makehq/sdk';
@@ -172,7 +172,7 @@ function registerToolAsCommand(parent: Command, tool: MakeTool, category: string
         cmd.addHelpText('after', `\nExample:\n\n${indented}\n`);
     }
 
-    const handler = async (positional: string | undefined, localOptions: Record<string, string>): Promise<void> => {
+    const handler = async (positional: string | undefined, localOptions: OptionValues): Promise<void> => {
         if (selfIdProperty && selfIdFlag) {
             const fromFlag = localOptions[selfIdProperty];
             if (positional !== undefined && fromFlag !== undefined) {
@@ -231,11 +231,9 @@ function registerToolAsCommand(parent: Command, tool: MakeTool, category: string
     };
 
     if (selfIdProperty) {
-        cmd.action((positional: string | undefined, localOptions: Record<string, string>) =>
-            handler(positional, localOptions),
-        );
+        cmd.action((positional: string | undefined, localOptions: OptionValues) => handler(positional, localOptions));
     } else {
-        cmd.action((localOptions: Record<string, string>) => handler(undefined, localOptions));
+        cmd.action((localOptions: OptionValues) => handler(undefined, localOptions));
     }
 }
 
