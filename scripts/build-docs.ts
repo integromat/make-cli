@@ -37,6 +37,9 @@ function buildToolSection(tool: MakeTool, categorySlug: string): string {
     if (selfIdProperty && selfIdSchema && selfIdFlag) {
         const argName = camelToKebab(selfIdProperty);
         const isRequired = required.has(selfIdProperty);
+        // Standard CLI convention: `<arg>` for required positional, `[arg]` for
+        // optional. Matches the brackets shown in `--help` Usage lines.
+        const argToken = isRequired ? `<${argName}>` : `[${argName}]`;
         const rawDesc = selfIdSchema.description?.replace(/\|/g, '\\|').replace(/\n/g, ' ').trim() ?? '';
         // SDK descriptions generally omit trailing punctuation; normalize to a
         // single '.' so the cross-reference clause reads as a second sentence.
@@ -49,7 +52,7 @@ function buildToolSection(tool: MakeTool, categorySlug: string): string {
         lines.push('');
         lines.push('| Argument | Description | Required |');
         lines.push('|----------|-------------|----------|');
-        lines.push(`| \`<${argName}>\` | ${desc} | ${isRequired ? 'Yes' : 'No'} |`);
+        lines.push(`| \`${argToken}\` | ${desc} | ${isRequired ? 'Yes' : 'No'} |`);
         lines.push('');
     }
 

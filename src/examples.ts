@@ -87,11 +87,15 @@ export function formatExampleCommand(
     const entries = Object.entries(example).filter(([, v]) => v !== false);
     if (entries.length === 0) return command;
 
-    let head = command;
-    const flagEntries = entries.filter(([name]) => name !== positionalKey);
+    // Resolve the positional against the already-filtered entries so that a
+    // `false` value on the positional key is treated the same as any other
+    // flag: skipped, not rendered as `command false`.
+    const positionalEntry = positionalKey ? entries.find(([name]) => name === positionalKey) : undefined;
+    const flagEntries = positionalEntry ? entries.filter(([name]) => name !== positionalKey) : entries;
 
-    if (positionalKey && positionalKey in example) {
-        const value = example[positionalKey]!;
+    let head = command;
+    if (positionalEntry) {
+        const value = positionalEntry[1];
         const positional = typeof value === 'boolean' ? String(value) : formatExampleValue(value).flat;
         head = `${command} ${positional}`;
     }

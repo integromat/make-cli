@@ -201,4 +201,46 @@ describe('formatExampleCommand', () => {
         const lines = result.split('\n');
         expect(lines[lines.length - 1]).not.toMatch(/\\$/);
     });
+
+    describe('with positional key', () => {
+        it('renders the positional value right after the command and drops the matching flag', () => {
+            const result = formatExampleCommand(
+                'make-cli data-structures get',
+                { dataStructureId: 178 },
+                'dataStructureId',
+            );
+            expect(result).toBe('make-cli data-structures get 178');
+        });
+
+        it('keeps other keys as flags alongside the positional', () => {
+            const result = formatExampleCommand(
+                'make-cli executions get',
+                { scenarioId: 925, executionId: 'abc' },
+                'executionId',
+            );
+            expect(result).toBe('make-cli executions get abc --scenario-id=925');
+        });
+
+        it('skips the positional when the example value for it is false', () => {
+            const result = formatExampleCommand(
+                'make-cli scenarios run',
+                { scenarioId: false, responsive: true },
+                'scenarioId',
+            );
+            // `false` on the positional key must be treated as "omit", matching
+            // the behavior of `false` on any other flag. It must NOT render as
+            // `make-cli scenarios run false`.
+            expect(result).toBe('make-cli scenarios run --responsive');
+        });
+
+        it('falls back to flag-only rendering when the positional key is not present in the example', () => {
+            const result = formatExampleCommand('make-cli scenarios list', { teamId: 5 }, 'scenarioId');
+            expect(result).toBe('make-cli scenarios list --team-id=5');
+        });
+
+        it('is a no-op when positionalKey is undefined', () => {
+            const result = formatExampleCommand('make-cli scenarios list', { teamId: 5 });
+            expect(result).toBe('make-cli scenarios list --team-id=5');
+        });
+    });
 });
