@@ -447,6 +447,22 @@ describe('CLI: deriveSelfIdentifier', () => {
             ),
         ).toBeUndefined();
     });
+
+    it('returns undefined when resourceId collides with an Object.prototype key but is not declared on the schema', () => {
+        // Guards against a `resourceId` like `toString` or `hasOwnProperty`
+        // being treated as present via the prototype chain. Only own
+        // properties declared on the schema should count.
+        for (const protoKey of ['toString', 'hasOwnProperty', 'constructor', '__proto__']) {
+            expect(
+                deriveSelfIdentifier(
+                    makeTool({
+                        resourceId: protoKey,
+                        inputSchema: { type: 'object', properties: {}, required: [] },
+                    }),
+                ),
+            ).toBeUndefined();
+        }
+    });
 });
 
 describe('CLI: positional argument for self identifiers', () => {

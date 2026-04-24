@@ -37,9 +37,13 @@ function buildToolSection(tool: MakeTool, categorySlug: string): string {
     if (selfIdProperty && selfIdSchema && selfIdFlag) {
         const argName = camelToKebab(selfIdProperty);
         const isRequired = required.has(selfIdProperty);
-        // Standard CLI convention: `<arg>` for required positional, `[arg]` for
-        // optional. Matches the brackets shown in `--help` Usage lines.
-        const argToken = isRequired ? `<${argName}>` : `[${argName}]`;
+        // Keep positional argument notation aligned with the CLI `--help` Usage
+        // lines, which render this self identifier as `[arg]` regardless of
+        // logical requiredness — the positional is always registered as
+        // optional at the Commander level so the `--<arg>` flag alternative
+        // stays valid. Requiredness is conveyed separately via the Required
+        // column and the description.
+        const argToken = `[${argName}]`;
         const rawDesc = selfIdSchema.description?.replace(/\|/g, '\\|').replace(/\n/g, ' ').trim() ?? '';
         // SDK descriptions generally omit trailing punctuation; normalize to a
         // single '.' so the cross-reference clause reads as a second sentence.

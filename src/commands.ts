@@ -46,7 +46,10 @@ export function deriveSelfIdentifier(tool: MakeTool): string | undefined {
     const resourceId = tool.resourceId;
     if (!resourceId) return undefined;
     const properties = tool.inputSchema.properties ?? {};
-    return resourceId in properties ? resourceId : undefined;
+    // Use an own-property check so a `resourceId` that happens to match an
+    // Object.prototype method name (e.g. `toString`) is not treated as present
+    // when the schema doesn't actually declare it.
+    return Object.hasOwn(properties, resourceId) ? resourceId : undefined;
 }
 
 /**
