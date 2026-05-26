@@ -134,6 +134,43 @@ make-cli scenarios create \
 make-cli scenarios list --team-id=123 --output=table
 ```
 
+### Custom app icons and visibility
+
+The SDK app helpers include the app-icon upload/readback endpoints used by Make's Apps SDK:
+
+```bash
+# Upload a 512x512 PNG app icon
+make-cli sdk-apps set-icon my-app 1 ./assets/icon.png
+
+# Read the uploaded 512px icon back for verification
+make-cli sdk-apps get-icon my-app 1 /tmp/my-app-icon.png
+```
+
+Use 512x512 PNG icons for SDK apps. The upload command writes the raw PNG to the SDK icon endpoint and the readback command downloads `/icon/512`, which is the verification route.
+
+App visibility and module visibility are separate. After uploading a complete app, publish both the app and every module that should be available publicly:
+
+```bash
+# Mark the app version public
+make-cli sdk-apps set-public my-app 1
+
+# Mark each module public
+make-cli sdk-modules set-public my-app 1 makeAnApiCall
+make-cli sdk-modules set-public my-app 1 listItems
+
+# Roll back if needed
+make-cli sdk-modules set-private my-app 1 listItems
+make-cli sdk-apps set-private my-app 1
+```
+
+For a complete production SDK app, upload and verify at least:
+
+1. app base section and docs
+2. connection object and connection sections
+3. all module objects and their `api`, `expect`, `interface`, and `samples` sections
+4. a 512x512 PNG icon with `sdk-apps set-icon` and `sdk-apps get-icon`
+5. public visibility for the app and each module with `set-public`
+
 ### Resource IDs
 
 Resource-level actions (`get`, `update`, `delete`, and similar) accept the resource's own ID as a **positional argument**. The long-form flag is still available for scripting or when you prefer being explicit — both forms are equivalent:
