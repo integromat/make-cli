@@ -158,8 +158,8 @@ Commands are organized by category:
 **Scenarios**
 
 - `scenarios` — Scenarios
-- `executions` — Scenario executions
-- `incomplete-executions` — Incomplete executions
+- `executions` — Scenario runs
+- `incomplete-executions` — Incomplete runs
 - `folders` — Scenario folders
 - `functions` — Custom functions
 - `hooks` — Webhooks
