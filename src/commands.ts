@@ -82,18 +82,18 @@ export function coerceValue(value: string, schema: JSONSchema): JSONValue {
                     jsonValue = readFileSync(filePath, 'utf8');
                 } catch (err) {
                     const reason = err instanceof Error ? err.message : String(err);
-                    throw new Error(\`Unable to read JSON input file "\${filePath}": \${reason}\`);
+                    throw new Error(`Unable to read JSON input file "${filePath}": ${reason}`);
                 }
             }
 
             try {
                 const parsed = JSON.parse(jsonValue);
-                const inputDescription = filePath ? \`file "\${filePath}"\` : value;
+                const inputDescription = filePath ? `file "${filePath}"` : value;
 
                 if (type === 'array') {
                     if (!Array.isArray(parsed)) {
                         throw new Error(
-                            \`Expected JSON array for schema type "array", got: \${inputDescription}\`,
+                            `Expected JSON array for schema type "array", got: ${inputDescription}`,
                         );
                     }
                 } else if (
@@ -102,7 +102,7 @@ export function coerceValue(value: string, schema: JSONSchema): JSONValue {
                     typeof parsed !== 'object'
                 ) {
                     throw new Error(
-                        \`Expected JSON object for schema type "object", got: \${inputDescription}\`,
+                        `Expected JSON object for schema type "object", got: ${inputDescription}`,
                     );
                 }
 
@@ -110,9 +110,9 @@ export function coerceValue(value: string, schema: JSONSchema): JSONValue {
             } catch (err) {
                 if (err instanceof SyntaxError) {
                     if (filePath) {
-                        throw new Error(\`Expected valid JSON in file "\${filePath}"\`);
+                        throw new Error(`Expected valid JSON in file "${filePath}"`);
                     }
-                    throw new Error(\`Expected valid JSON, got: \${value}\`);
+                    throw new Error(`Expected valid JSON, got: ${value}`);
                 }
                 throw err;
             }
