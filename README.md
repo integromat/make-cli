@@ -33,6 +33,7 @@ Pre-built binaries are available for download from the [GitHub Releases](https:/
 | macOS    | x86_64 (Intel)        | `make-cli-darwin-amd64.tar.gz`  |
 | macOS    | arm64 (Apple Silicon) | `make-cli-darwin-arm64.tar.gz`  |
 | Windows  | x86_64                | `make-cli-windows-amd64.tar.gz` |
+| Windows  | ARM64                 | `make-cli-windows-arm64.tar.gz` |
 
 Download and extract the archive for your platform, then place the binary somewhere on your `PATH`.
 
