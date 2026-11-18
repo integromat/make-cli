@@ -60,6 +60,10 @@ jobs:
                       target: windows-x64
                       platform: windows
                       arch: amd64
+                    - os: windows-latest
+                      target: windows-arm64
+                      platform: windows
+                      arch: arm64
 
         runs-on: ${{ matrix.os }}
 
