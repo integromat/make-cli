@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, beforeEach, afterEach, jest } from '@jest/globals';
 import { Command, Option } from 'commander';
 import { deriveActionName, coerceValue, buildCommands, deriveSelfIdentifier } from '../src/commands.js';
@@ -103,6 +106,60 @@ describe('CLI: coerceValue', () => {
     it('should handle array type fields (e.g., ["string", "number"])', () => {
         // When type is an array, use the first element
         expect(coerceValue('hello', { type: ['string', 'number'] as unknown as 'string' })).toBe('hello');
+    });
+});
+
+describe('CLI: coerceValue JSON files', () => {
+    it('should read object and array values from @-prefixed files', () => {
+        const directory = mkdtempSync(join(tmpdir(), 'make-cli-json-'));
+        const objectPath = join(directory, 'scenario blueprint.json');
+        const arrayPath = join(directory, 'modules.json');
+
+        try {
+            writeFileSync(objectPath, '{"name":"My Scenario","flow":[]}', 'utf8');
+            writeFileSync(arrayPath, '[1,2,3]', 'utf8');
+
+            expect(coerceValue(\`@\${objectPath}\`, { type: 'object' })).toEqual({
+                name: 'My Scenario',
+                flow: [],
+            });
+            expect(coerceValue(\`@\${arrayPath}\`, { type: 'array' })).toEqual([1, 2, 3]);
+        } finally {
+            rmSync(directory, { recursive: true, force: true });
+        }
+    });
+
+    it('should report when a JSON input file cannot be read', () => {
+        const directory = mkdtempSync(join(tmpdir(), 'make-cli-json-'));
+        const filePath = join(directory, 'missing.json');
+
+        try {
+            expect(() => coerceValue(\`@\${filePath}\`, { type: 'object' })).toThrow(
+                \`Unable to read JSON input file "\${filePath}"\`,
+            );
+        } finally {
+            rmSync(directory, { recursive: true, force: true });
+        }
+    });
+
+    it('should report invalid JSON in a file', () => {
+        const directory = mkdtempSync(join(tmpdir(), 'make-cli-json-'));
+        const filePath = join(directory, 'invalid.json');
+
+        try {
+            writeFileSync(filePath, '{invalid json', 'utf8');
+            expect(() => coerceValue(\`@\${filePath}\`, { type: 'object' })).toThrow(
+                \`Expected valid JSON in file "\${filePath}"\`,
+            );
+        } finally {
+            rmSync(directory, { recursive: true, force: true });
+        }
+    });
+
+    it('should require a path after the @ prefix', () => {
+        expect(() => coerceValue('@', { type: 'object' })).toThrow(
+            'Expected a file path after "@" for JSON input',
+        );
     });
 });
 
