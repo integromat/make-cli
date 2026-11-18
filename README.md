@@ -130,8 +130,20 @@ make-cli scenarios create \
   --scheduling='{"type":"on-demand"}' \
   --blueprint='{"name":"My Scenario","flow":[],"metadata":{}}'
 
+# Create a scenario using a blueprint stored in a file
+make-cli scenarios create --team-id=123 --scheduling='{"type":"on-demand"}' --blueprint=@./scenario-blueprint.json
+
 # Output formatting
 make-cli scenarios list --team-id=123 --output=table
+```
+
+### JSON inputs from files
+
+Options whose schema expects a JSON object or array accept either inline JSON or a file reference. Prefix the file path with `@`. The path is resolved from the command's current working directory. This is useful for large scenario blueprints and avoids command-line length limits on Windows.
+
+```bash
+make-cli scenarios create --team-id=123 --blueprint=@./scenario-blueprint.json
+make-cli scenarios update 456 --blueprint="@./scenario blueprints/production.json"
 ```
 
 ### Resource IDs
