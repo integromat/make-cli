@@ -119,11 +119,11 @@ describe('CLI: coerceValue JSON files', () => {
             writeFileSync(objectPath, '{"name":"My Scenario","flow":[]}', 'utf8');
             writeFileSync(arrayPath, '[1,2,3]', 'utf8');
 
-            expect(coerceValue(\`@\${objectPath}\`, { type: 'object' })).toEqual({
+            expect(coerceValue(`@${objectPath}`, { type: 'object' })).toEqual({
                 name: 'My Scenario',
                 flow: [],
             });
-            expect(coerceValue(\`@\${arrayPath}\`, { type: 'array' })).toEqual([1, 2, 3]);
+            expect(coerceValue(`@${arrayPath}`, { type: 'array' })).toEqual([1, 2, 3]);
         } finally {
             rmSync(directory, { recursive: true, force: true });
         }
@@ -134,8 +134,8 @@ describe('CLI: coerceValue JSON files', () => {
         const filePath = join(directory, 'missing.json');
 
         try {
-            expect(() => coerceValue(\`@\${filePath}\`, { type: 'object' })).toThrow(
-                \`Unable to read JSON input file "\${filePath}"\`,
+            expect(() => coerceValue(`@${filePath}`, { type: 'object' })).toThrow(
+                `Unable to read JSON input file "${filePath}"`,
             );
         } finally {
             rmSync(directory, { recursive: true, force: true });
@@ -148,8 +148,8 @@ describe('CLI: coerceValue JSON files', () => {
 
         try {
             writeFileSync(filePath, '{invalid json', 'utf8');
-            expect(() => coerceValue(\`@\${filePath}\`, { type: 'object' })).toThrow(
-                \`Expected valid JSON in file "\${filePath}"\`,
+            expect(() => coerceValue(`@${filePath}`, { type: 'object' })).toThrow(
+                `Expected valid JSON in file "${filePath}"`,
             );
         } finally {
             rmSync(directory, { recursive: true, force: true });
